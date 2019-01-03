@@ -20,8 +20,7 @@ import groovy.transform.Field
     OFF:   "off",
     HEAT:  "heat",
     AUTO:  "auto",
-    COOL:  "cool",
-    EHEAT: "emergency heat"
+    COOL:  "cool"
 ]
 
 @Field final Map      FAN_MODE = [
@@ -46,28 +45,14 @@ import groovy.transform.Field
     HEATING: "heating"
 ]
 
-@Field final List HEAT_ONLY_MODES = [MODE.HEAT, MODE.EHEAT]
+@Field final List HEAT_ONLY_MODES = [MODE.HEAT]
 @Field final List COOL_ONLY_MODES = [MODE.COOL]
 @Field final List DUAL_SETPOINT_MODES = [MODE.AUTO]
 @Field final List RUNNING_OP_STATES = [OP_STATE.HEATING, OP_STATE.COOLING]
 
-// config - TODO: move these to a pref page
-@Field List SUPPORTED_MODES = [MODE.OFF, MODE.HEAT, MODE.AUTO, MODE.COOL, MODE.EHEAT]
+@Field List SUPPORTED_MODES = [MODE.OFF, MODE.HEAT, MODE.AUTO, MODE.COOL]
+//@Field List SUPPORTED_MODES = [MODE.OFF, MODE.HEAT]
 @Field List SUPPORTED_FAN_MODES = [FAN_MODE.OFF, FAN_MODE.AUTO, FAN_MODE.ON]
-
-@Field final Float    THRESHOLD_DEGREES = 1.0
-@Field final Integer  SIM_HVAC_CYCLE_SECONDS = 15
-@Field final Integer  DELAY_EVAL_ON_MODE_CHANGE_SECONDS = 3
-
-@Field final Integer  MIN_SETPOINT = 35
-@Field final Integer  MAX_SETPOINT = 95
-@Field final Integer  AUTO_MODE_SETPOINT_SPREAD = 4 // In auto mode, heat & cool setpoints must be this far apart
-// end config
-
-// derivatives
-@Field final IntRange FULL_SETPOINT_RANGE = (MIN_SETPOINT..MAX_SETPOINT)
-@Field final IntRange HEATING_SETPOINT_RANGE = (MIN_SETPOINT..(MAX_SETPOINT - AUTO_MODE_SETPOINT_SPREAD))
-@Field final IntRange COOLING_SETPOINT_RANGE = ((MIN_SETPOINT + AUTO_MODE_SETPOINT_SPREAD)..MAX_SETPOINT)
 
 // defaults
 @Field final String   DEFAULT_MODE = MODE.OFF
@@ -107,7 +92,6 @@ metadata {
 
         command "setTemperature", ["number"]
         command "setHumidityPercent", ["number"]
-        command "delayedEvaluate"
 
         command "markDeviceOnline"
         command "markDeviceOffline"
@@ -233,6 +217,25 @@ metadata {
             "deviceHealthControl", "refresh"
         ])
     }
+
+    preferences {
+        input("MIN_SETPOINT", "number",
+            title: "Min Temperature Setpoint",
+            displayDuringSetup: true,
+            defaultValue: 60
+        )
+        input("MAX_SETPOINT", "number",
+            title: "Max Temperature Setpoint",
+            displayDuringSetup: true,
+            defaultValue: 80
+        )
+        input("AUTO_MODE_SETPOINT_SPREAD", "number",
+            // In auto mode, heat & cool setpoints must be this far apart
+            title: "Auto Mode Setpoint Spread",
+            displayDuringSetup: true,
+            defaultValue: 4
+        )
+    }
 }
 
 def installed() {
@@ -283,12 +286,12 @@ private initialize() {
     sendEvent(name: "temperature", value: DEFAULT_TEMPERATURE, unit: "°F")
     sendEvent(name: "humidity", value: DEFAULT_HUMIDITY, unit: "%")
     sendEvent(name: "heatingSetpoint", value: DEFAULT_HEATING_SETPOINT, unit: "°F")
-    sendEvent(name: "heatingSetpointMin", value: HEATING_SETPOINT_RANGE.getFrom(), unit: "°F")
-    sendEvent(name: "heatingSetpointMax", value: HEATING_SETPOINT_RANGE.getTo(), unit: "°F")
+    sendEvent(name: "heatingSetpointMin", value: MIN_SETPOINT, unit: "°F")
+    sendEvent(name: "heatingSetpointMax", value: MAX_SETPOINT, unit: "°F")
     sendEvent(name: "thermostatSetpoint", value: DEFAULT_THERMOSTAT_SETPOINT, unit: "°F")
     sendEvent(name: "coolingSetpoint", value: DEFAULT_COOLING_SETPOINT, unit: "°F")
-    sendEvent(name: "coolingSetpointMin", value: COOLING_SETPOINT_RANGE.getFrom(), unit: "°F")
-    sendEvent(name: "coolingSetpointMax", value: COOLING_SETPOINT_RANGE.getTo(), unit: "°F")
+    sendEvent(name: "coolingSetpointMin", value: MIN_SETPOINT, unit: "°F")
+    sendEvent(name: "coolingSetpointMax", value: MAX_SETPOINT, unit: "°F")
     sendEvent(name: "thermostatMode", value: DEFAULT_MODE)
     sendEvent(name: "thermostatFanMode", value: DEFAULT_FAN_MODE)
     sendEvent(name: "thermostatOperatingState", value: DEFAULT_OP_STATE)
@@ -508,6 +511,22 @@ private setpointDown() {
     done()
 }
 
+private Integer getTemperature() {
+    def ts = device.currentState("temperature")
+    Integer currentTemp = DEFAULT_TEMPERATURE
+    try {
+        currentTemp = ts.integerValue
+    } catch (all) {
+        log.warn "Encountered an error getting Integer value of temperature state. Value is '$ts.stringValue'. Reverting to default of $DEFAULT_TEMPERATURE"
+        setTemperature(DEFAULT_TEMPERATURE)
+    }
+    return currentTemp
+}
+
+private setTemperature(newTemp) {
+    sendEvent(name:"temperature", value: newTemp)
+}
+
 private setHumidityPercent(Integer humidityValue) {
     log.trace "Executing 'setHumidityPercent' to $humidityValue"
     Integer curHum = device.currentValue("humidity") as Integer
@@ -550,6 +569,9 @@ private proposeCoolSetpoint(Integer coolSetpoint) {
 private proposeSetpoints(Integer heatSetpoint, Integer coolSetpoint, String prioritySetpointType=null) {
     Integer newHeatSetpoint;
     Integer newCoolSetpoint;
+    IntRange FULL_SETPOINT_RANGE = (MIN_SETPOINT.toInteger()..MAX_SETPOINT.toInteger());
+    IntRange HEATING_SETPOINT_RANGE = (MIN_SETPOINT.toInteger()..(MAX_SETPOINT.toInteger() - AUTO_MODE_SETPOINT_SPREAD.toInteger()));
+    IntRange COOLING_SETPOINT_RANGE = ((MIN_SETPOINT.toInteger() + AUTO_MODE_SETPOINT_SPREAD.toInteger())..MAX_SETPOINT.toInteger());
 
     String mode = getThermostatMode()
     Integer proposedHeatSetpoint = heatSetpoint?:getHeatingSetpoint()
@@ -605,4 +627,15 @@ private proposeSetpoints(Integer heatSetpoint, Integer coolSetpoint, String prio
  */
 private void done() {
     log.trace "---- DONE ----"
+}
+
+def setStatus(type, status) {
+    log.debug("Setting status ${type}: ${status}")
+
+    //if (type == "temp") {
+    //    setTemperature(Float.parseFloat(status));
+    //}
+    //else {
+    sendEvent(name: type, value: status)
+    //}
 }

@@ -16,10 +16,6 @@ else {
         mqtt: { adaptor: 'mqtt', host: `mqtt://${process.env.MQTT_IP_ADDRESS}:${process.env.MQTT_PORT}` }
     };
 
-    const devices = {
-
-    };
-
     fetch('https://developer-api.nest.com', {
         headers: {
             'Cntent-Type': 'application/json',
@@ -37,20 +33,40 @@ else {
 
             work: function (my) {
                 my.home.on('status', (data) => {
-                    console.log('The Nest Home at a glance:', data);
+                    // console.log('The Nest Home at a glance:', data);
                 });
 
                 for (const deviceName of Object.keys(my.devices)) {
-                    let device = my.devices[deviceName];
+                    const device = my.devices[deviceName];
 
-                    if (handlers[device.type]) {
-                        handlers[device.type](device);
+                    if (readHandlers[device.type]) {
+                        readHandlers[device.type](device);
                     }
-                }\
+                }
 
-                my.mqtt.on('message', function (data) {
-                    console.log(data);
-                    my.thermostat.targetTemperatureC(parseFloat(data));
+                my.mqtt.subscribe('smartthings/Dining Room/thermostatMode/state');
+
+                my.mqtt.on('message', function (topic, data) {
+                    console.log(topic + ": " + data);
+
+                    // 0 - prefix (smartthings)
+                    // 1 - Device Name
+                    // 2 - Device Capability
+                    // 3 - state - suffix
+                    const topicParts = topic.split('/');
+                    const device = my.devices[topicParts[1]];
+
+                    if (device) {
+                        if (writeHandlers[device.type]) {
+                            writeHandlers[device.type](device, topicParts[2], String(data));
+                        }
+                        else {
+                            console.warn(`Write handler not found for device type ${device.type}.`);
+                        }
+                    }
+                    else {
+                        console.warn(`Device ${topicParts[1]} was not found.`);
+                    }
                 });
             }
         }).start();
@@ -99,10 +115,10 @@ function getDevicesConfig(nestResponse) {
     }
 }
 
-const handlers = {
+const readHandlers = {
     'Thermostat': function (device) {
         device.on('status', function (status) {
-            console.log(`Thermostat status for ${device.name}`, status);
+            // console.log(`Thermostat status for ${device.name}`, status);
         });
 
         every((1).minute(), function(){
@@ -111,6 +127,25 @@ const handlers = {
 
             console.log(`Ambient Temperature for ${device.name}: ${tempF}F/${tempC}C`);
         });
+    },
+    'Protect': function (device) {
+        device.on('status', function (status) {
+            // console.log(`Protect status for ${device.name}`, status);
+        });
+    }
+};
+
+const writeHandlers = {
+    'Thermostat': function (device, command, value) {
+        switch (command) {
+            case 'thermostatMode':
+                device.write('hvac_mode', value, (err, a) => {
+                    console.log('hvac_mode', err, a);
+                });
+                break;
+            default:
+                console.error(`Unknown command sent to Thermostat ${device.name}: `, command, value);
+        }
     },
     'Protect': function (device) {
         device.on('status', function (status) {
