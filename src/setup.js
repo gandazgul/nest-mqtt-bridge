@@ -1,5 +1,8 @@
+const path = require('path');
+const fs = require('fs');
 const dotenv = require('dotenv');
 const inquirer = require('inquirer');
+
 const rootDir = path.resolve('.');
 const dotEnvFile = path.join(rootDir, '.env');
 

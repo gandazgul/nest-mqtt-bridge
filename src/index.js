@@ -1,6 +1,6 @@
 const fetch = require('node-fetch');
 const Cylon = require('cylon');
-require('dotenv').config();
+require('dotenv').config({path: process.env.ENV_CONFIG});
 
 if (!process.env.NEST_ACCESS_TOKEN) {
     require('./setup').run();

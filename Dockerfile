@@ -8,6 +8,7 @@ WORKDIR /app
 # Copy and install dependencies
 COPY package.json /app/
 RUN npm install --production
+RUN npm cache clean --force
 
 # Copy everything else
 COPY ./src /app

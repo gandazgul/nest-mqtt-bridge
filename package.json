@@ -9,8 +9,7 @@
     "scripts": {
         "dev": "nodemon src/index.js",
         "setup": "rm -f .env.bak && cp .env .env.back && node src/index.js",
-        "start": "pm2 start src/index.js",
-        "stop": "pm2 stop src/index.js"
+        "start": "nodemon src/index.js"
     },
     "dependencies": {
         "cylon": "^1.3.0",
