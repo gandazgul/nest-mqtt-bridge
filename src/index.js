@@ -40,16 +40,18 @@ else {
                     const device = my.devices[deviceName];
 
                     if (readHandlers[device.type]) {
-                        readHandlers[device.type](device);
+                        readHandlers[device.type].call(my, device);
                     }
 
                     if (writeHandlers[device.type]) {
-                        my.mqtt.subscribe(`smartthings/${deviceName}/#/state`);
+                        for (const capability of Object.keys(capabilityMap)) {
+                            my.mqtt.subscribe(`smartthings/${deviceName}/${capability}/state`);
+                        }
                     }
                 }
 
                 my.mqtt.on('message', function (topic, data) {
-                    console.log(topic + ": " + data);
+                    // console.log(topic + ": " + data);
 
                     // 0 - prefix (smartthings)
                     // 1 - Device Name
@@ -60,7 +62,7 @@ else {
 
                     if (device) {
                         if (writeHandlers[device.type]) {
-                            writeHandlers[device.type](device, topicParts[2], String(data));
+                            writeHandlers[device.type].call(my, device, topicParts[2], String(data));
                         }
                         else {
                             console.warn(`Write handler not found for device type ${device.type}.`);
@@ -119,16 +121,36 @@ function getDevicesConfig(nestResponse) {
 
 const readHandlers = {
     'Thermostat': function (device) {
-        device.on('status', function (status) {
-            // console.log(`Thermostat status for ${device.name}`, status);
-        });
+        const processStatus = (status) => {
+            // console.log(status);
 
-        every((1).minute(), function(){
-            const tempC = device.ambientTemperatureC();
-            const tempF = device.ambientTemperatureF();
+            const tempF = status.ambient_temperature_f;
+            console.log(`Ambient Temperature for ${device.name}: ${tempF}F`);
+            this.mqtt.publish(`smartthings/${device.name}/temperature/set_state`, String(tempF));
 
-            console.log(`Ambient Temperature for ${device.name}: ${tempF}F/${tempC}C`);
-        });
+            const humidity = status.humidity;
+            console.log(`Ambient humidity for ${device.name}: ${humidity}%`);
+            this.mqtt.publish(`smartthings/${device.name}/humidity/set_state`, String(humidity));
+
+            const hvacMode = status.hvac_mode;
+            console.log(`HVAC Mode for ${device.name}: ${hvacMode}`);
+            this.mqtt.publish(`smartthings/${device.name}/thermostatMode/set_state`, String(hvacMode));
+
+            const isOnline = status.is_online;
+            const hvacState = status.hvac_state;
+            if (isOnline) {
+                console.log(`HVAC State for ${device.name}: ${hvacState}`);
+            }
+            else {
+                console.log(`Online status for ${device.name}: Offline`);
+            }
+
+            this.mqtt.publish(`smartthings/${device.name}/thermostatOperatingState/set_state`, isOnline ? String(hvacState) : 'offline');
+        };
+
+        device.on('status', processStatus);
+
+        every((1).minute(), () => processStatus(device.thermostat));
     },
     'Protect': function (device) {
         device.on('status', function (status) {
@@ -137,16 +159,35 @@ const readHandlers = {
     }
 };
 
+function writeErrorHandler(device, command, value, err) {
+    if (err) {
+        console.warn(`Error: ${device.type} ${device.name} doesn't know how to handle: ${command} = ${value}`, err);
+    }
+    else {
+        console.log(`${device.type} ${device.name} executed ${command} = ${value} successfully`);
+    }
+}
+
+const capabilityMap = {
+    thermostatMode: {
+        nestCommand: 'hvac_mode',
+        getValue: (v) => v,
+    },
+    heatingSetpoint: {
+        nestCommand: 'target_temperature_f',
+        getValue: (value) => Number(value),
+    },
+};
+
 const writeHandlers = {
     'Thermostat': function (device, command, value) {
-        switch (command) {
-            case 'thermostatMode':
-                device.write('hvac_mode', value, (err, a) => {
-                    console.log('hvac_mode', err, a);
-                });
-                break;
-            default:
-                console.error(`Unknown command sent to Thermostat ${device.name}: `, command, value);
+        const cb = (err) => writeErrorHandler(device, command, value, err);
+
+        if (Object.keys(capabilityMap).indexOf(command) !== -1) {
+            device.write(capabilityMap[command].nestCommand, capabilityMap[command].getValue(value), cb);
+        }
+        else {
+            console.error(`Unknown command sent to Thermostat ${device.name}: `, command, value);
         }
     },
     'Protect': function (device) {

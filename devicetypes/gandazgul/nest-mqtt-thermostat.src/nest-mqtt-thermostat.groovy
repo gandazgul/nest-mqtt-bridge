@@ -94,6 +94,8 @@ metadata {
 
         command "markDeviceOnline"
         command "markDeviceOffline"
+
+        command "setStatus"
     }
 
     tiles(scale: 2) {
@@ -194,12 +196,9 @@ metadata {
             state "default", label: "", action: "refresh", icon: "st.secondary.refresh"
         }
 
-        // this should be read only
-        standardTile("deviceHealthControl", "device.healthStatus", decoration: "flat", width: 2, height: 2, inactiveLabel: false) {
-            state "online",  label: "ONLINE", backgroundColor: "#00A0DC", action: "markDeviceOffline", icon: "st.Health & Wellness.health9", nextState: "goingOffline", defaultState: true
-            state "offline", label: "OFFLINE", backgroundColor: "#E86D13", action: "markDeviceOnline", icon: "st.Health & Wellness.health9", nextState: "goingOnline"
-            state "goingOnline", label: "Going ONLINE", backgroundColor: "#FFFFFF", icon: "st.Health & Wellness.health9"
-            state "goingOffline", label: "Going OFFLINE", backgroundColor: "#FFFFFF", icon: "st.Health & Wellness.health9"
+        valueTile("deviceHealth", "device.healthStatus", decoration: "flat", width: 2, height: 2, inactiveLabel: false) {
+            state "online",  label: "ONLINE", backgroundColor: "#00A0DC", icon: "st.Health & Wellness.health9", defaultState: true
+            state "offline", label: "OFFLINE", backgroundColor: "#E86D13", icon: "st.Health & Wellness.health9"
         }
 
         main("roomTemp")
@@ -211,7 +210,7 @@ metadata {
             "coolingSetpoint",
             "fanMode",
             "blank2x1", "blank2x1",
-            "deviceHealthControl", "refresh"
+            "deviceHealth", "refresh"
         ])
     }
 
