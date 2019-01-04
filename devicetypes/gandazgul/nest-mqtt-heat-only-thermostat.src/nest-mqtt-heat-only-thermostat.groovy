@@ -1,5 +1,5 @@
 /**
- *  MQTT Thermostat
+ *  MQTT Heat Only Thermostat
  *
  *  Copyright 2017 Carlos Ravelo
  *
@@ -18,9 +18,7 @@ import groovy.transform.Field
 // enummaps
 @Field final Map      MODE = [
     OFF:   "off",
-    HEAT:  "heat",
-    AUTO:  "auto",
-    COOL:  "cool"
+    HEAT:  "heat"
 ]
 
 @Field final Map      FAN_MODE = [
@@ -30,27 +28,19 @@ import groovy.transform.Field
 ]
 
 @Field final Map      OP_STATE = [
-    COOLING:   "cooling",
     HEATING:   "heating",
-    FAN:       "fan only",
-    PEND_COOL: "pending cool",
     PEND_HEAT: "pending heat",
-    VENT_ECO:  "vent economizer",
     IDLE:      "idle"
 ]
 
 @Field final Map SETPOINT_TYPE = [
-    COOLING: "cooling",
     HEATING: "heating"
 ]
 
 @Field final List HEAT_ONLY_MODES = [MODE.HEAT]
-@Field final List COOL_ONLY_MODES = [MODE.COOL]
-@Field final List DUAL_SETPOINT_MODES = [MODE.AUTO]
-@Field final List RUNNING_OP_STATES = [OP_STATE.HEATING, OP_STATE.COOLING]
+@Field final List RUNNING_OP_STATES = [OP_STATE.HEATING]
 
-@Field List SUPPORTED_MODES = [MODE.OFF, MODE.HEAT, MODE.AUTO, MODE.COOL]
-//@Field List SUPPORTED_MODES = [MODE.OFF, MODE.HEAT]
+@Field List SUPPORTED_MODES = [MODE.OFF, MODE.HEAT]
 @Field List SUPPORTED_FAN_MODES = [FAN_MODE.OFF, FAN_MODE.AUTO, FAN_MODE.ON]
 
 // defaults
@@ -61,14 +51,12 @@ import groovy.transform.Field
 @Field final String   DEFAULT_SETPOINT_TYPE = SETPOINT_TYPE.HEATING
 @Field final Integer  DEFAULT_TEMPERATURE = 72
 @Field final Integer  DEFAULT_HEATING_SETPOINT = 68
-@Field final Integer  DEFAULT_COOLING_SETPOINT = 80
 @Field final Integer  DEFAULT_THERMOSTAT_SETPOINT = DEFAULT_HEATING_SETPOINT
 @Field final Integer  DEFAULT_HUMIDITY = 52
 
-
 metadata {
     // Automatically generated. Make future change here.
-    definition (name: "MQTT Thermostat", namespace: "gandazgul", author: "Carlos Ravelo") {
+    definition (name: "MQTT Heat Only Thermostat", namespace: "gandazgul", author: "Carlos Ravelo") {
         capability "Sensor"
         capability "Actuator"
         capability "Health Check"
@@ -81,8 +69,6 @@ metadata {
 
         command "heatUp"
         command "heatDown"
-        command "coolUp"
-        command "coolDown"
         command "setpointUp"
         command "setpointDown"
 
@@ -111,18 +97,12 @@ metadata {
             tileAttribute("device.thermostatOperatingState", key: "OPERATING_STATE") {
                 attributeState("idle", backgroundColor: "#9a9a9a")
                 attributeState("heating", backgroundColor: "#E86D13")
-                attributeState("cooling", backgroundColor: "#00A0DC")
             }
             tileAttribute("device.thermostatMode", key: "THERMOSTAT_MODE") {
                 attributeState("off",  label: '${name}')
                 attributeState("heat", label: '${name}')
-                attributeState("cool", label: '${name}')
-                attributeState("auto", label: '${name}')
             }
             tileAttribute("device.heatingSetpoint", key: "HEATING_SETPOINT") {
-                attributeState("default", label: '${currentValue}', unit: "°F", defaultState: true)
-            }
-            tileAttribute("device.coolingSetpoint", key: "COOLING_SETPOINT") {
                 attributeState("default", label: '${currentValue}', unit: "°F", defaultState: true)
             }
         }
@@ -130,8 +110,6 @@ metadata {
         standardTile("mode", "device.thermostatMode", width: 2, height: 2, decoration: "flat") {
             state "off",            action: "cycleMode", nextState: "updating", icon: "st.thermostat.heating-cooling-off", backgroundColor: "#CCCCCC", defaultState: true
             state "heat",           action: "cycleMode", nextState: "updating", icon: "st.thermostat.heat"
-            state "cool",           action: "cycleMode", nextState: "updating", icon: "st.thermostat.cool"
-            state "auto",           action: "cycleMode", nextState: "updating", icon: "st.thermostat.auto"
             state "updating", label: "Working"
         }
 
@@ -139,7 +117,6 @@ metadata {
             state "off",       action: "cycleFanMode", nextState: "updating", icon: "st.thermostat.fan-off", backgroundColor: "#CCCCCC", defaultState: true
             state "auto",      action: "cycleFanMode", nextState: "updating", icon: "st.thermostat.fan-auto"
             state "on",        action: "cycleFanMode", nextState: "updating", icon: "st.thermostat.fan-on"
-            state "circulate", action: "cycleFanMode", nextState: "updating", icon: "st.thermostat.fan-circulate"
             state "updating", label: "Working"
         }
 
@@ -151,16 +128,6 @@ metadata {
         }
         standardTile("heatUp", "device.temperature", width: 1, height: 1, decoration: "flat") {
             state "default", label: "heat", action: "heatUp", icon: "st.thermostat.thermostat-up"
-        }
-
-        valueTile("coolingSetpoint", "device.coolingSetpoint", width: 2, height: 2, decoration: "flat") {
-            state "cool", label: 'Cool\n${currentValue}°', unit: "°F", backgroundColor: "#00A0DC"
-        }
-        standardTile("coolDown", "device.temperature", width: 1, height: 1, decoration: "flat") {
-            state "default", label: "cool", action: "coolDown", icon: "st.thermostat.thermostat-down"
-        }
-        standardTile("coolUp", "device.temperature", width: 1, height: 1, decoration: "flat") {
-            state "default", label: "cool", action: "coolUp", icon: "st.thermostat.thermostat-up"
         }
 
         valueTile("roomTemp", "device.temperature", width: 2, height: 1, decoration: "flat") {
@@ -202,15 +169,17 @@ metadata {
             state "goingOffline", label: "Going OFFLINE", backgroundColor: "#FFFFFF", icon: "st.Health & Wellness.health9"
         }
 
+        valueTile("blank2x1", "device.switch", width: 2, height: 1, decoration: "flat") {
+            state "default", label: ""
+        }
+
         main("roomTemp")
         details(["thermostatMulti",
             "heatDown", "heatUp",
-            "mode",
-            "coolDown", "coolUp",
-            "heatingSetpoint",
-            "coolingSetpoint",
-            "fanMode",
             "blank2x1", "blank2x1",
+            "heatingSetpoint",
+            "mode",
+            "fanMode",
             "deviceHealthControl", "refresh"
         ])
     }

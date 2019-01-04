@@ -42,9 +42,11 @@ else {
                     if (readHandlers[device.type]) {
                         readHandlers[device.type](device);
                     }
-                }
 
-                my.mqtt.subscribe('smartthings/Dining Room/thermostatMode/state');
+                    if (writeHandlers[device.type]) {
+                        my.mqtt.subscribe(`smartthings/${deviceName}/#/state`);
+                    }
+                }
 
                 my.mqtt.on('message', function (topic, data) {
                     console.log(topic + ": " + data);
