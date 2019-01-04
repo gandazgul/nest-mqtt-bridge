@@ -68,7 +68,7 @@ import groovy.transform.Field
 
 metadata {
     // Automatically generated. Make future change here.
-    definition (name: "MQTT Thermostat", namespace: "gandazgul", author: "Carlos Ravelo") {
+    definition (name: "Nest MQTT Thermostat", namespace: "gandazgul", author: "Carlos Ravelo") {
         capability "Sensor"
         capability "Actuator"
         capability "Health Check"

@@ -15,7 +15,7 @@
  */
 import groovy.transform.Field
 
-// enummaps
+// enummap
 @Field final Map      MODE = [
     OFF:   "off",
     HEAT:  "heat"
@@ -56,7 +56,7 @@ import groovy.transform.Field
 
 metadata {
     // Automatically generated. Make future change here.
-    definition (name: "MQTT Heat Only Thermostat", namespace: "gandazgul", author: "Carlos Ravelo") {
+    definition (name: "Nest MQTT Heat Only Thermostat", namespace: "gandazgul", author: "Carlos Ravelo") {
         capability "Sensor"
         capability "Actuator"
         capability "Health Check"
