@@ -130,6 +130,8 @@ const readHandlers = {
             // if the status hasn't changed then do nothing
             if (shallowEqual(previousStatus, status)) { return; }
 
+            previousStatus = status;
+
             const tempF = status.ambient_temperature_f;
             console.log(`Ambient Temperature for ${device.name}: ${tempF}F`);
             this.mqtt.publish(`smartthings/${device.name}/temperature/set_state`, String(tempF));
