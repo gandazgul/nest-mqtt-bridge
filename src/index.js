@@ -1,5 +1,6 @@
 const fetch = require('node-fetch');
 const Cylon = require('cylon');
+const shallowEqual = require('shallowequal');
 require('dotenv').config({path: process.env.ENV_CONFIG});
 
 if (!process.env.NEST_ACCESS_TOKEN) {
@@ -121,12 +122,21 @@ function getDevicesConfig(nestResponse) {
 
 const readHandlers = {
     'Thermostat': function (device) {
+        let previousStatus = {};
+
         const processStatus = (status) => {
             // console.log(status);
+
+            // if the status hasn't changed then do nothing
+            if (shallowEqual(previousStatus, status)) { return; }
 
             const tempF = status.ambient_temperature_f;
             console.log(`Ambient Temperature for ${device.name}: ${tempF}F`);
             this.mqtt.publish(`smartthings/${device.name}/temperature/set_state`, String(tempF));
+
+            const targetTemperatureF = status.target_temperature_f;
+            console.log(`Heating Setpoint for ${device.name}: ${targetTemperatureF}F`);
+            this.mqtt.publish(`smartthings/${device.name}/heatingSetpoint/set_state`, String(targetTemperatureF));
 
             const humidity = status.humidity;
             console.log(`Ambient humidity for ${device.name}: ${humidity}%`);
