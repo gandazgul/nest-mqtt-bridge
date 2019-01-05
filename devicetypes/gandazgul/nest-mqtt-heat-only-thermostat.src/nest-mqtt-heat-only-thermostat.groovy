@@ -21,34 +21,18 @@ import groovy.transform.Field
     HEAT:  "heat"
 ]
 
-@Field final Map      FAN_MODE = [
-    OFF:       "off",
-    AUTO:      "auto",
-    ON:        "on"
-]
-
 @Field final Map      OP_STATE = [
     HEATING:   "heating",
     PEND_HEAT: "pending heat",
     IDLE:      "idle"
 ]
 
-@Field final Map SETPOINT_TYPE = [
-    HEATING: "heating"
-]
-
-@Field final List HEAT_ONLY_MODES = [MODE.HEAT]
-@Field final List RUNNING_OP_STATES = [OP_STATE.HEATING]
-
 @Field List SUPPORTED_MODES = [MODE.OFF, MODE.HEAT]
-@Field List SUPPORTED_FAN_MODES = [FAN_MODE.OFF, FAN_MODE.AUTO, FAN_MODE.ON]
 
 // defaults
 @Field final String   DEFAULT_MODE = MODE.OFF
-@Field final String   DEFAULT_FAN_MODE = FAN_MODE.AUTO
 @Field final String   DEFAULT_OP_STATE = OP_STATE.IDLE
 @Field final String   DEFAULT_PREVIOUS_STATE = OP_STATE.HEATING
-@Field final String   DEFAULT_SETPOINT_TYPE = SETPOINT_TYPE.HEATING
 @Field final Integer  DEFAULT_TEMPERATURE = 72
 @Field final Integer  DEFAULT_HEATING_SETPOINT = 68
 @Field final Integer  DEFAULT_THERMOSTAT_SETPOINT = DEFAULT_HEATING_SETPOINT
@@ -71,7 +55,6 @@ metadata {
         command "heatDown"
 
         command "cycleMode"
-        command "cycleFanMode"
 
         command "setTemperature", ["number"]
         command "setHumidityPercent", ["number"]
@@ -110,13 +93,6 @@ metadata {
         standardTile("mode", "device.thermostatMode", width: 2, height: 2, decoration: "flat") {
             state "off",            action: "cycleMode", nextState: "updating", icon: "st.thermostat.heating-cooling-off", backgroundColor: "#CCCCCC", defaultState: true
             state "heat",           action: "cycleMode", nextState: "updating", icon: "st.thermostat.heat"
-            state "updating", label: "Working"
-        }
-
-        standardTile("fanMode", "device.thermostatFanMode", width: 2, height: 2, decoration: "flat") {
-            state "off",       action: "cycleFanMode", nextState: "updating", icon: "st.thermostat.fan-off", backgroundColor: "#CCCCCC", defaultState: true
-            state "auto",      action: "cycleFanMode", nextState: "updating", icon: "st.thermostat.fan-auto"
-            state "on",        action: "cycleFanMode", nextState: "updating", icon: "st.thermostat.fan-on"
             state "updating", label: "Working"
         }
 
@@ -170,7 +146,6 @@ metadata {
             "blank2x1", "blank2x1",
             "heatingSetpoint",
             "mode",
-            "fanMode",
             "deviceHealth", "refresh"
         ])
     }
@@ -185,12 +160,6 @@ metadata {
             title: "Max Temperature Setpoint",
             displayDuringSetup: true,
             defaultValue: 80
-        )
-        input("AUTO_MODE_SETPOINT_SPREAD", "number",
-            // In auto mode, heat & cool setpoints must be this far apart
-            title: "Auto Mode Setpoint Spread",
-            displayDuringSetup: true,
-            defaultValue: 4
         )
     }
 }
@@ -247,7 +216,6 @@ private initialize() {
     sendEvent(name: "heatingSetpointMax", value: MAX_SETPOINT, unit: "°F")
     sendEvent(name: "thermostatSetpoint", value: DEFAULT_THERMOSTAT_SETPOINT, unit: "°F")
     sendEvent(name: "thermostatMode", value: DEFAULT_MODE)
-    sendEvent(name: "thermostatFanMode", value: DEFAULT_FAN_MODE)
     sendEvent(name: "thermostatOperatingState", value: DEFAULT_OP_STATE)
 
     state.isHvacRunning = false
@@ -277,7 +245,6 @@ def parse(String description) {
 def refresh() {
     log.trace "Executing refresh"
     sendEvent(name: "thermostatMode", value: getThermostatMode())
-    sendEvent(name: "thermostatFanMode", value: getFanMode())
     sendEvent(name: "thermostatOperatingState", value: getOperatingState())
     sendEvent(name: "thermostatSetpoint", value: getThermostatSetpoint(), unit: "°F")
     sendEvent(name: "heatingSetpoint", value: getHeatingSetpoint(), unit: "°F")
@@ -316,27 +283,6 @@ private Boolean isThermostatOff() {
     return getThermostatMode() == MODE.OFF
 }
 
-// Fan mode
-private String getFanMode() {
-    return device.currentValue("thermostatFanMode") ?: DEFAULT_FAN_MODE
-}
-
-def setThermostatFanMode(String value) {
-    if (value in SUPPORTED_FAN_MODES) {
-        sendEvent(name: "thermostatFanMode", value: value)
-    } else {
-        log.warn "'$value' is not a supported fan mode. Please set one of ${SUPPORTED_FAN_MODES.join(', ')}"
-    }
-}
-
-private String cycleFanMode() {
-    log.trace "Executing 'cycleFanMode'"
-    String nextMode = nextListElement(SUPPORTED_FAN_MODES, getFanMode())
-    setThermostatFanMode(nextMode)
-    done()
-    return nextMode
-}
-
 private String nextListElement(List uniqueList, currentElt) {
     if (uniqueList != uniqueList.unique().asList()) {
         throw InvalidPararmeterException("Each element of the List argument must be unique.")
@@ -368,75 +314,6 @@ private setOperatingState(String operatingState) {
 }
 
 // setpoint
-private Integer getHeatingSetpoint() {
-    def hs = device.currentState("heatingSetpoint")
-    return hs ? hs.getIntegerValue() : DEFAULT_HEATING_SETPOINT
-}
-
-def setHeatingSetpoint(Double degreesF) {
-    log.trace "Executing 'setHeatingSetpoint' $degreesF"
-    state.lastUserSetpointMode = SETPOINT_TYPE.HEATING
-
-    proposeHeatSetpoint(degreesF as Integer)
-
-    done()
-}
-
-private heatUp() {
-    log.trace "Executing 'heatUp'"
-    def newHsp = getHeatingSetpoint() + 1
-    if (getThermostatMode() in HEAT_ONLY_MODES + DUAL_SETPOINT_MODES) {
-        setHeatingSetpoint(newHsp)
-    }
-    done()
-}
-
-private heatDown() {
-    log.trace "Executing 'heatDown'"
-    def newHsp = getHeatingSetpoint() - 1
-    if (getThermostatMode() in HEAT_ONLY_MODES + DUAL_SETPOINT_MODES) {
-        setHeatingSetpoint(newHsp)
-    }
-    done()
-}
-
-private Integer getTemperature() {
-    def ts = device.currentState("temperature")
-    Integer currentTemp = DEFAULT_TEMPERATURE
-    try {
-        currentTemp = ts.integerValue
-    } catch (all) {
-        log.warn "Encountered an error getting Integer value of temperature state. Value is '$ts.stringValue'. Reverting to default of $DEFAULT_TEMPERATURE"
-        setTemperature(DEFAULT_TEMPERATURE)
-    }
-    return currentTemp
-}
-
-private setTemperature(newTemp) {
-    sendEvent(name:"temperature", value: newTemp)
-}
-
-private setHumidityPercent(Integer humidityValue) {
-    log.trace "Executing 'setHumidityPercent' to $humidityValue"
-    Integer curHum = device.currentValue("humidity") as Integer
-    if (humidityValue != null) {
-        Integer hum = boundInt(humidityValue, (0..100))
-        if (hum != humidityValue) {
-            log.warn "Corrrected humidity value to $hum"
-            humidityValue = hum
-        }
-        sendEvent(name: "humidity", value: humidityValue, unit: "%")
-    } else {
-        log.warn "Could not set measured huimidity to $humidityValue%"
-    }
-}
-
-private getHumidityPercent() {
-    def hp = device.currentState("humidity")
-
-    return hp ? hp.getIntegerValue() : DEFAULT_HUMIDITY
-}
-
 /**
  * Ensure an integer value is within the provided range, or set it to either extent if it is outside the range.
  * @param Number value         The integer to evaluate
@@ -461,6 +338,69 @@ private proposeHeatSetpoint(Integer heatSetpoint) {
 
     log.info "Setting heating setpoint of $newHeatSetpoint"
     sendEvent(name: "heatingSetpoint", value: newHeatSetpoint, unit: "F")
+}
+
+private Integer getHeatingSetpoint() {
+    def hs = device.currentState("heatingSetpoint")
+
+    return hs ? hs.getIntegerValue() : DEFAULT_HEATING_SETPOINT
+}
+
+private heatUp() {
+    log.trace "Executing 'heatUp'"
+    def newHsp = getHeatingSetpoint() + 1
+
+    proposeHeatSetpoint(newHsp)
+
+    done()
+}
+
+private heatDown() {
+    log.trace "Executing 'heatDown'"
+    def newHsp = getHeatingSetpoint() - 1
+
+    proposeHeatSetpoint(newHsp)
+
+    done()
+}
+
+// temperature
+private Integer getTemperature() {
+    def ts = device.currentState("temperature")
+    Integer currentTemp = DEFAULT_TEMPERATURE
+    try {
+        currentTemp = ts.integerValue
+    } catch (all) {
+        log.warn "Encountered an error getting Integer value of temperature state. Value is '$ts.stringValue'. Reverting to default of $DEFAULT_TEMPERATURE"
+        setTemperature(DEFAULT_TEMPERATURE)
+    }
+    return currentTemp
+}
+
+private setTemperature(newTemp) {
+    sendEvent(name:"temperature", value: newTemp)
+}
+
+// humidity
+private setHumidityPercent(Integer humidityValue) {
+    log.trace "Executing 'setHumidityPercent' to $humidityValue"
+    Integer curHum = device.currentValue("humidity") as Integer
+    if (humidityValue != null) {
+        Integer hum = boundInt(humidityValue, (0..100))
+        if (hum != humidityValue) {
+            log.warn "Corrrected humidity value to $hum"
+            humidityValue = hum
+        }
+        sendEvent(name: "humidity", value: humidityValue, unit: "%")
+    } else {
+        log.warn "Could not set measured huimidity to $humidityValue%"
+    }
+}
+
+private getHumidityPercent() {
+    def hp = device.currentState("humidity")
+
+    return hp ? hp.getIntegerValue() : DEFAULT_HUMIDITY
 }
 
 /**
