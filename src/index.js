@@ -1,7 +1,6 @@
 const fetch = require('node-fetch');
 const Cylon = require('cylon');
-const shallowEqual = require('shallowequal');
-require('dotenv').config({path: process.env.ENV_CONFIG});
+require('dotenv').config({ path: process.env.ENV_CONFIG });
 
 if (!process.env.NEST_ACCESS_TOKEN) {
     require('./setup').run();
@@ -127,37 +126,39 @@ const readHandlers = {
         const processStatus = (status) => {
             // console.log(status);
 
-            // if the status hasn't changed then do nothing
-            if (shallowEqual(previousStatus, status)) { return; }
+            // The keys are Nest props and the values are Smartthings props
+            const properties = {
+                ambient_temperature_f: 'temperature',
+                target_temperature_f: 'heatingSetpoint',
+                humidity: 'humidity',
+                hvac_mode: 'thermostatMode',
+            };
+            const nestProps = Object.keys(properties);
 
-            previousStatus = status;
+            for (const prop of nestProps) {
+                if (previousStatus[prop] !== status[prop]) {
+                    console.log(`Ambient Temperature for ${device.name}: ${status[prop]}F`);
+                    this.mqtt.publish(`smartthings/${device.name}/temperature/set_state`, String(status[prop]));
 
-            const tempF = status.ambient_temperature_f;
-            console.log(`Ambient Temperature for ${device.name}: ${tempF}F`);
-            this.mqtt.publish(`smartthings/${device.name}/temperature/set_state`, String(tempF));
-
-            const targetTemperatureF = status.target_temperature_f;
-            console.log(`Heating Setpoint for ${device.name}: ${targetTemperatureF}F`);
-            this.mqtt.publish(`smartthings/${device.name}/heatingSetpoint/set_state`, String(targetTemperatureF));
-
-            const humidity = status.humidity;
-            console.log(`Ambient humidity for ${device.name}: ${humidity}%`);
-            this.mqtt.publish(`smartthings/${device.name}/humidity/set_state`, String(humidity));
-
-            const hvacMode = status.hvac_mode;
-            console.log(`HVAC Mode for ${device.name}: ${hvacMode}`);
-            this.mqtt.publish(`smartthings/${device.name}/thermostatMode/set_state`, String(hvacMode));
-
-            const isOnline = status.is_online;
-            const hvacState = status.hvac_state;
-            if (isOnline) {
-                console.log(`HVAC State for ${device.name}: ${hvacState}`);
-            }
-            else {
-                console.log(`Online status for ${device.name}: Offline`);
+                    previousStatus[prop] = status[prop];
+                }
             }
 
-            this.mqtt.publish(`smartthings/${device.name}/thermostatOperatingState/set_state`, isOnline ? String(hvacState) : 'offline');
+            if (previousStatus.is_online !== status.is_online || previousStatus.hvac_state !== status.hvac_state) {
+                const isOnline = status.is_online;
+                const hvacState = status.hvac_state;
+                if (isOnline) {
+                    console.log(`HVAC State for ${device.name}: ${hvacState}`);
+                }
+                else {
+                    console.log(`${device.name} is Offline`);
+                }
+
+                this.mqtt.publish(
+                    `smartthings/${device.name}/thermostatOperatingState/set_state`,
+                    isOnline ? String(hvacState) : 'offline'
+                );
+            }
         };
 
         device.on('status', processStatus);

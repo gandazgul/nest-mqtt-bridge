@@ -19,7 +19,6 @@
         "dotenv": "^6.2.0",
         "inquirer": "^6.2.1",
         "node-fetch": "^2.3.0",
-        "nodemon": "^1.18.9",
-        "shallowequal": "^1.1.0"
+        "nodemon": "^1.18.9"
     }
 }
