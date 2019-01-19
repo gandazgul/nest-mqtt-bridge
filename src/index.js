@@ -174,6 +174,9 @@ const readHandlers = {
                     `smartthings/${device.name}/thermostatOperatingState/set_state`,
                     isOnline ? String(hvacState) : 'offline'
                 );
+
+                previousStatus.is_online = status.is_online;
+                previousStatus.hvac_state = status.hvac_state;
             }
         };
 
