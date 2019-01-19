@@ -128,17 +128,33 @@ const readHandlers = {
 
             // The keys are Nest props and the values are Smartthings props
             const properties = {
-                ambient_temperature_f: 'temperature',
-                target_temperature_f: 'heatingSetpoint',
-                humidity: 'humidity',
-                hvac_mode: 'thermostatMode',
+                ambient_temperature_f: {
+                    smartThingsProp: 'temperature',
+                    message: `Ambient Temperature for ${device.name}: `,
+                    units: 'F'
+                },
+                target_temperature_f: {
+                    smartThingsProp: 'heatingSetpoint',
+                    message: `Target Heating Temperature for ${device.name}: `,
+                    units: 'F'
+                },
+                humidity: {
+                    smartThingsProp: 'humidity',
+                    message: `Humidity level for ${device.name}: `,
+                    units: '%'
+                },
+                hvac_mode: {
+                    smartThingsProp: 'thermostatMode',
+                    message: `HVAC Mode Setting for ${device.name}: `,
+                    units: ''
+                },
             };
             const nestProps = Object.keys(properties);
 
             for (const prop of nestProps) {
                 if (previousStatus[prop] !== status[prop]) {
-                    console.log(`Ambient Temperature for ${device.name}: ${status[prop]}F`);
-                    this.mqtt.publish(`smartthings/${device.name}/temperature/set_state`, String(status[prop]));
+                    console.log(`${properties[prop].message}: ${status[prop]}${properties[prop].units}`);
+                    this.mqtt.publish(`smartthings/${device.name}/${properties[prop].smartThingsProp}/set_state`, String(status[prop]));
 
                     previousStatus[prop] = status[prop];
                 }
